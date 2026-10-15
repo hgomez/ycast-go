@@ -76,7 +76,7 @@ or routers. Dependencies are kept to a strict minimum (`gopkg.in/yaml.v3`,
   ```sh
   # OpenWrt 24.10 (opkg, .ipk) — arm64 here, see below for arm32:
   opkg install ycast-go_1.0.0-1_aarch64_generic.ipk
-  # OpenWrt 25.x / snapshots (apk, .apk) — the package is unsigned:
+  # OpenWrt 25.x (apk, .apk) — the package is unsigned:
   apk add --allow-untrusted ycast-go-1.0.0-1.apk
   cp /etc/ycast/stations.yml.example /etc/ycast/stations.yml  # then edit it
   /etc/init.d/ycast enable && /etc/init.d/ycast start

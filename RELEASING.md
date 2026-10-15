@@ -27,7 +27,7 @@ git push origin v1.0.0
 All jobs run in parallel except `docker-manifest` (waits for its two builds)
 and `release` (waits for `binaries`, `deb`, `rpm` and `openwrt`). A failure
 in one job does not block the others. The `openwrt` matrix builds four
-packages (release 24.10.8 `.ipk` and snapshot `.apk`, for `aarch64_generic`
+packages (release 24.10.8 `.ipk` and release 25.12.5 `.apk`, for `aarch64_generic`
 and `arm_cortex-a15_neon-vfpv4` — see `packaging/openwrt/README.md`); it is
 the slowest job (each SDK builds the Go toolchain from source, ~10 min).
 
@@ -101,9 +101,9 @@ writing) and `AGENTS.md`:
 
 - only GitHub-owned actions (`actions/*`), each pinned to a commit SHA;
 - images pinned by digest (manifest-list digests, valid for multi-arch);
-- OpenWrt SDKs downloaded over HTTPS with sha256 verification (pinned SDK
-  version 24.10.8 for the `.ipk` jobs; the snapshot SDK is verified against
-  upstream's published `sha256sums` at download time);
+- OpenWrt SDKs pinned by version (24.10.8 for the `.ipk` jobs, 25.12.5 for
+  the `.apk` jobs), each download verified over HTTPS against upstream's
+  published `sha256sums`;
 - no third-party release action — publishing uses the preinstalled `gh` CLI;
 - `persist-credentials: false` on every checkout;
 - per-job `permissions:` (least privilege);

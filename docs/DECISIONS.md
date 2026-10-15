@@ -250,7 +250,7 @@ port mapping; the version string is injected through a `VERSION` build arg.
 the deb CI job, `fedora:44` for the rpm job. Bumping the pin is a deliberate,
 reviewable change.
 
-## 15. OpenWrt packages from the official SDK (ipk for 24.10, apk for snapshots)
+## 15. OpenWrt packages from the official SDK (ipk for 24.10, apk for 25.12)
 
 **Decision**: OpenWrt packages come from a native buildroot package Makefile
 (`packaging/openwrt/`), built in CI with the official OpenWrt SDKs, in a
@@ -275,12 +275,18 @@ runs on any ARMv7, but the package architecture is what the installer checks,
 so one arm32 arch had to be chosen (the generic `armsr/armv7` one).
 
 **Consequences**: CI gains a slow matrix job (the `golang/host` toolchain is
-built from source in each SDK, several minutes per job); the snapshot builds
-track a moving upstream by design; the snapshot `.apk` files are unsigned
+built from source in each SDK, several minutes per job); the snapshot `.apk`
+files are unsigned
 (`apk add --allow-untrusted`); the arm32 package only installs as-is on
 architectures matching `arm_cortex-a15_neon-vfpv4` — documented in
 `packaging/openwrt/README.md`. None of this has been tested on real
 hardware; the README says so.
+
+**Amendment**: with the OpenWrt 25.12 release out, the two snapshot jobs are
+replaced by pinned 25.12.5 SDK jobs (same architectures
+`aarch64_generic`/`arm_cortex-a15_neon-vfpv4`, same `.apk` format); the
+"snapshot tracks a moving upstream" caveat is gone — all four SDKs are now
+version-pinned with sha256 verification.
 
 ## 16. golangci-lint: curated config, not maximal strictness
 

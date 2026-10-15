@@ -16,10 +16,12 @@ go test -race ./...                       # all tests must pass
 ```
 
 No Makefile; this is a single-package project, those commands are all there
-is. `golangci-lint` is pinned in `mise.toml` (v2, config `.golangci.yml`) —
-its deviations from maximal strictness are documented at the top of that
-file: log with the idiomatic key-value form, do not wrap every stdlib error,
-do not re-order functions for the linter.
+is. `golangci-lint` is pinned in `mise.toml` (v2, config `.golangci.yml`) and
+runs in CI from the checksum-pinned official binary. The config is
+deliberately lean — see `docs/DECISIONS.md` #16/#17 for what is enabled,
+what is disabled and why (each `gosec`/`errcheck` exclusion is justified
+there); rejected findings are fixed in code or silenced with a targeted,
+explained `//nolint`, never by growing the exclusion list by default.
 
 ## Non-negotiable rules
 

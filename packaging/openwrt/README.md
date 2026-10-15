@@ -11,18 +11,17 @@ de l'architecture.
 Quatre paquets par release, produits avec les SDK officiels OpenWrt
 (`.github/workflows/release.yml`, job `openwrt`) :
 
-| SDK                     | Architecture du paquet        | Artefact |
-|-------------------------|-------------------------------|----------|
+| SDK                        | Architecture du paquet        | Artefact |
+|----------------------------|-------------------------------|----------|
 | release 24.10 (`armsr/armv8`) | `aarch64_generic`       | `.ipk`   |
 | release 24.10 (`armsr/armv7`) | `arm_cortex-a15_neon-vfpv4` | `.ipk` |
-| snapshot (`armsr/armv8`)      | `aarch64_generic`       | `.apk`   |
-| snapshot (`armsr/armv7`)      | `arm_cortex-a15_neon-vfpv4` | `.apk` |
+| release 25.12 (`armsr/armv8`) | `aarch64_generic`       | `.apk`   |
+| release 25.12 (`armsr/armv7`) | `arm_cortex-a15_neon-vfpv4` | `.apk` |
 
-OpenWrt 24.10 utilise encore `opkg` (`.ipk`) ; les `.apk` (apk-tools) sont
-ceux des snapshots et des futures releases 25.x. Le SDK snapshot bouge
-plusieurs fois par jour : la CI télécharge la dernière version et vérifie
-son sha256 contre le `sha256sums` publié par upstream au moment du
-téléchargement (pas de pin statique possible, contrairement au SDK 24.10).
+OpenWrt 24.10 utilise encore `opkg` (`.ipk`) ; la génération 25.12 est
+passée à apk-tools (`.apk`). Les deux SDK sont épinglés par version ; le
+sha256 de chaque téléchargement est vérifié contre le `sha256sums` publié
+par upstream.
 
 **Architecture ARM 32 bits** : OpenWrt découpe arm par classe de SoC
 (`arm_cortex-a7`, `arm_cortex-a9`, `arm_cortex-a15_neon-vfpv4`…). Le paquet
@@ -76,7 +75,7 @@ vers radio-browser.info.
 Le service n'est **pas** activé/démarré à l'installation : configurer
 `stations.yml` et la redirection DNS d'abord, puis
 `/etc/init.d/ycast enable && /etc/init.d/ycast start`.
-Sur les SDK snapshot, le `.apk` produit n'est pas signé (le SDK n'a pas de
+Sur un SDK 25.12, le `.apk` produit n'est pas signé (le SDK n'a pas de
 clé) : l'installer avec `apk add --allow-untrusted <fichier>.apk`.
 
 ## Version

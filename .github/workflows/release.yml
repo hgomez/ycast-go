@@ -82,10 +82,9 @@ jobs:
           path: dist/*.rpm
 
   # OpenWrt packages, built with the official SDKs (packaging/openwrt/).
-  # 24.10 uses opkg (.ipk); the .apk format (apk-tools) is the snapshot / 25.x
-  # generation. The 24.10.8 SDK is pinned; the snapshot SDK moves daily, so
-  # its sha256 is verified against upstream's published sha256sums at
-  # download time instead. arm32 arch is arm_cortex-a15_neon-vfpv4 (generic
+  # 24.10 uses opkg (.ipk); the .apk format (apk-tools) is the 25.x
+  # generation. Both SDK versions are pinned (with sha256 verification at
+  # download time). arm32 arch is arm_cortex-a15_neon-vfpv4 (generic
   # armsr/armv7 target); other ARM sub-archs rebuild from the same sources
   # with the matching SDK (see packaging/openwrt/README.md).
   openwrt:
@@ -97,19 +96,15 @@ jobs:
         include:
           - { version: "24.10.8", target: "armsr/armv8", ext: ipk }
           - { version: "24.10.8", target: "armsr/armv7", ext: ipk }
-          - { version: "snapshot", target: "armsr/armv8", ext: apk }
-          - { version: "snapshot", target: "armsr/armv7", ext: apk }
+          - { version: "25.12.5", target: "armsr/armv8", ext: apk }
+          - { version: "25.12.5", target: "armsr/armv7", ext: apk }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (node24)
         with:
           persist-credentials: false
       - name: Download and verify the SDK
         run: |
-          if [ "${{ matrix.version }}" = snapshot ]; then
-            base="https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}"
-          else
-            base="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}"
-          fi
+          base="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}"
           sdk=$(curl -sf "$base/" | grep -oE 'openwrt-sdk-[^"<]*\.tar\.zst' | head -n1)
           echo "SDK: $base/$sdk"
           expected=$(curl -sf "$base/sha256sums" | awk -v f="*$sdk" '$2 == f {print $1}')
