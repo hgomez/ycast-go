@@ -17,6 +17,7 @@ git push origin v1.0.0
         ├─ job binaries      → ./build.sh → 6 binaries (amd64, arm64, armv7, armv6, mips, mipsle)
         ├─ job deb           → debian:trixie-20261005 container → ycast-go_1.0.0_amd64.deb
         ├─ job rpm           → fedora:44 container              → ycast-go-1.0.0-1.fc44.x86_64.rpm
+        ├─ job openwrt       → OpenWrt SDK matrix (4 jobs)      → ycast-go .ipk/.apk (arm64, arm32)
         ├─ docker-amd64      → native build (ubuntu-latest) → push :sha-xxxx-amd64@digest (GHCR)
         ├─ docker-arm64      → native build (ubuntu-24.04-arm) → push :sha-xxxx-arm64@digest (GHCR)
         ├─ docker-manifest   → merge → ghcr.io/hgomez/ycast-go:{1.0.0, 1.0, latest}
@@ -24,8 +25,11 @@ git push origin v1.0.0
 ```
 
 All jobs run in parallel except `docker-manifest` (waits for its two builds)
-and `release` (waits for `binaries`, `deb` and `rpm`). A failure in one job
-does not block the others.
+and `release` (waits for `binaries`, `deb`, `rpm` and `openwrt`). A failure
+in one job does not block the others. The `openwrt` matrix builds four
+packages (release 24.10.8 `.ipk` and release 25.12.5 `.apk`, for `aarch64_generic`
+and `arm_cortex-a15_neon-vfpv4` — see `packaging/openwrt/README.md`); it is
+the slowest job (each SDK builds the Go toolchain from source, ~10 min).
 
 ## Step by step
 
@@ -44,11 +48,11 @@ does not block the others.
    gh release create v1.0.0 --title v1.0.0 --generate-notes
    ```
 4. **Watch the run**: https://github.com/hgomez/ycast-go/actions — expect
-   about five minutes end to end (the apt/dnf installs in the packaging
-   containers are the slow part).
+   five to fifteen minutes end to end (the packaging containers and the
+   OpenWrt SDK jobs are the slow part).
 5. **Verify**:
    - https://github.com/hgomez/ycast-go/releases shows the release with the
-     6 binaries, the `.deb` and the `.rpm`;
+     6 binaries, the `.deb`, the `.rpm` and the 4 OpenWrt packages;
    - `podman pull ghcr.io/hgomez/ycast-go:1.0.0` works;
    - sanity-check an artifact locally:
      `qemu-aarch64 ./ycast-go-linux-arm64 -version` → `ycast-go 1.0.0`.
@@ -97,6 +101,9 @@ writing) and `AGENTS.md`:
 
 - only GitHub-owned actions (`actions/*`), each pinned to a commit SHA;
 - images pinned by digest (manifest-list digests, valid for multi-arch);
+- OpenWrt SDKs pinned by version (24.10.8 for the `.ipk` jobs, 25.12.5 for
+  the `.apk` jobs), each download verified over HTTPS against upstream's
+  published `sha256sums`;
 - no third-party release action — publishing uses the preinstalled `gh` CLI;
 - `persist-credentials: false` on every checkout;
 - per-job `permissions:` (least privilege);

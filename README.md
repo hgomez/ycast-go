@@ -70,11 +70,27 @@ or routers. Dependencies are kept to a strict minimum (`gopkg.in/yaml.v3`,
 
 - **systemd**: `deploy/ycast-go.service` (binary in `/usr/local/bin`, config
   in `/etc/ycast/`).
-- **OpenWrt**: `deploy/openwrt-ycast.init`. Note that LuCI (uhttpd) already
-  occupies port 80:
+- **OpenWrt**: the official packages from the GitHub release are the easiest
+  path — they ship the binary, `/etc/ycast/stations.yml.example` and a procd
+  init script:
+  ```sh
+  # OpenWrt 24.10 (opkg, .ipk) — arm64 here, see below for arm32:
+  opkg install ycast-go_1.0.0-1_aarch64_generic.ipk
+  # OpenWrt 25.x (apk, .apk) — the package is unsigned:
+  apk add --allow-untrusted ycast-go-1.0.0-1.apk
+  cp /etc/ycast/stations.yml.example /etc/ycast/stations.yml  # then edit it
+  /etc/init.d/ycast enable && /etc/init.d/ycast start
+  ```
+  The package declares a single ARM 32-bit architecture
+  (`arm_cortex-a15_neon-vfpv4`, generic `armsr/armv7` target); the binary is
+  static ARMv7, but the installer checks the declared architecture. Other
+  ARM sub-archs (cortex-a7, cortex-a9…) and other targets rebuild from the
+  same sources with the matching SDK — see `packaging/openwrt/README.md`.
+  LuCI (uhttpd) occupies port 80 by default, move it first:
   `uci set uhttpd.main.listen_http='0.0.0.0:8080'; uci commit uhttpd; /etc/init.d/uhttpd restart`
-  (the web interface then lives on port 8080). Neither deployment file has been
-  tested on real hardware.
+  (the web interface then lives on port 8080). The OpenWrt package and the
+  manual install (`deploy/openwrt-ycast.init`) have not been tested on real
+  hardware.
 - Port 80 without root: `sudo setcap 'cap_net_bind_service=+ep' ./ycast-go`.
 - **Docker/Podman** (`deploy/docker-compose.yml` for Compose):
   ```sh

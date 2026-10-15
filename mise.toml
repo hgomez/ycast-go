@@ -1,2 +1,6 @@
 [tools]
 gh = "latest"
+go = "1.26.3"
+golangci-lint = "2.14.0"
+"github:getplumber/plumber" = "latest"
+

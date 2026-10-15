@@ -165,7 +165,7 @@ func (c *Client) getJSON(ctx context.Context, path string, q url.Values, ttl tim
 
 func (c *Client) fetch(ctx context.Context, u string) ([]byte, error) {
 	c.log.Debug("Radio Browser API request", "url", u)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,8 @@ func (c *Client) stationsQuery(ctx context.Context, path string, q url.Values, b
 		return nil, err
 	}
 	out := make([]*station.Station, 0, len(raw))
-	for _, j := range raw {
+	for i := range raw {
+		j := &raw[i] // index the slice: each entry is ~168 bytes, copying it per iteration is wasteful
 		if j.UUID == "" || (!c.showBroken && j.LastCheckOK != 1) {
 			continue
 		}
@@ -268,14 +269,16 @@ func (c *Client) stationsQuery(ctx context.Context, path string, q url.Values, b
 	return out, nil
 }
 
-// ByUUID looks a station up by its Radio Browser UUID.
+// ByUUID looks a station up by its Radio Browser UUID. A station that does
+// not exist (or is unusable) is reported as (nil, nil), not as an error:
+// callers treat it as an empty result, not a failure.
 func (c *Client) ByUUID(ctx context.Context, uuid string) (*station.Station, error) {
 	var raw []rbStationJSON
 	if err := c.getJSON(ctx, "stations/byuuid/"+url.PathEscape(uuid), url.Values{}, cacheTTL, &raw); err != nil {
 		return nil, err
 	}
 	if len(raw) == 0 || raw[0].UUID == "" {
-		return nil, nil
+		return nil, nil //nolint:nilnil // (nil, nil) deliberately means "station not found", not an error
 	}
 	return raw[0].toStation(), nil
 }
@@ -310,6 +313,7 @@ func (c *Client) Resolve(ctx context.Context, s *station.Station) {
 	}
 }
 
+// Search looks stations up by (partial) name, most voted first.
 func (c *Client) Search(ctx context.Context, name string) ([]*station.Station, error) {
 	q := url.Values{}
 	q.Set("order", "votes")
@@ -319,6 +323,7 @@ func (c *Client) Search(ctx context.Context, name string) ([]*station.Station, e
 	return c.stationsQuery(ctx, "stations/search", q, true)
 }
 
+// Popular returns the most voted stations.
 func (c *Client) Popular(ctx context.Context) ([]*station.Station, error) {
 	q := url.Values{}
 	q.Set("order", "votes")
@@ -340,14 +345,20 @@ func (c *Client) exactQuery(ctx context.Context, field, value string) ([]*statio
 	return c.stationsQuery(ctx, "stations/search", q, true)
 }
 
+// ByCountry lists the stations of one country (name-sorted, capped to
+// maxStations).
 func (c *Client) ByCountry(ctx context.Context, v string) ([]*station.Station, error) {
 	return c.exactQuery(ctx, "country", v)
 }
 
+// ByLanguage lists the stations of one language (name-sorted, capped to
+// maxStations).
 func (c *Client) ByLanguage(ctx context.Context, v string) ([]*station.Station, error) {
 	return c.exactQuery(ctx, "language", v)
 }
 
+// ByGenre lists the stations of one tag (name-sorted, capped to
+// maxStations).
 func (c *Client) ByGenre(ctx context.Context, v string) ([]*station.Station, error) {
 	return c.exactQuery(ctx, "tag", v)
 }
@@ -384,14 +395,18 @@ type rbDirJSON struct {
 
 func identity(s string) string { return s }
 
+// Countries lists the country directory (hidden below minimumCount stations,
+// counts capped to maxStations).
 func (c *Client) Countries(ctx context.Context) ([]Directory, error) {
 	return c.directories(ctx, "countries", identity)
 }
 
+// Languages lists the language directory (display names title-cased).
 func (c *Client) Languages(ctx context.Context) ([]Directory, error) {
 	return c.directories(ctx, "languages", pyTitle)
 }
 
+// Genres lists the tag directory (display names capitalized).
 func (c *Client) Genres(ctx context.Context) ([]Directory, error) {
 	return c.directories(ctx, "tags", pyCapitalize)
 }

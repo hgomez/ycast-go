@@ -46,7 +46,7 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, st.URL, nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, st.URL, http.NoBody)
 	if err != nil {
 		http.Error(w, "bad stream URL", http.StatusBadGateway)
 		return

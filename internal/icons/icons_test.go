@@ -12,8 +12,8 @@ import (
 func testPNG(t *testing.T, w, h int) []byte {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			if x < w/2 {
 				img.SetNRGBA(x, y, color.NRGBA{200, 30, 30, 255}) // opaque red left half
 			} // right half stays fully transparent

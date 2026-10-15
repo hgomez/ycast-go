@@ -27,20 +27,20 @@ import (
 // ------------------------------------------------------------------ helpers
 
 func discardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return slog.New(slog.DiscardHandler)
 }
 
-func get(t *testing.T, h http.Handler, host, uri string) (int, http.Header, string) {
+func get(t *testing.T, h http.Handler, host, uri string) (status int, hdr http.Header, body string) {
 	t.Helper()
-	req := httptest.NewRequest("GET", "http://"+host+uri, nil)
+	req := httptest.NewRequest("GET", "http://"+host+uri, http.NoBody)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	res := rec.Result()
-	body, err := io.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return res.StatusCode, res.Header, string(body)
+	return res.StatusCode, res.Header, string(data)
 }
 
 const testHost = "denon.vtuner.com"
@@ -72,7 +72,11 @@ func newFakeRB(t *testing.T) *fakeRB {
 	mux := http.NewServeMux()
 	writeJSON := func(w http.ResponseWriter, v any) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(v)
+		// The fakes only ever encode JSON-safe values; ignore the write error
+		// like errchkjson would allow, but keep the call checked for it.
+		if err := json.NewEncoder(w).Encode(v); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 	mux.HandleFunc("/json/tags", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, []map[string]any{
@@ -193,7 +197,7 @@ func TestStationItemXMLMatchesPython(t *testing.T) {
 	const goldenStation = `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><ListOfItems><ItemCount>1</ItemCount><Item><ItemType>Station</ItemType><StationId>RB_abc-123</StationId><StationName>Radio d'Alsace &amp; Co</StationName><StationUrl>http://stream.example/live</StationUrl><StationDesc>jazz, soul</StationDesc><Logo>http://denon.vtuner.com/ycast/icon?id=RB_abc-123</Logo><StationFormat>jazz</StationFormat><StationLocation>FR</StationLocation><StationBandWidth>128</StationBandWidth><StationMime>MP3</StationMime><Relia>3</Relia><Bookmark /></Item></ListOfItems>`
 
 	s, _ := newTestServer(t, func(c *Config) { c.ProxyHTTPS = false })
-	req := httptest.NewRequest("GET", "http://"+testHost+"/x", nil)
+	req := httptest.NewRequest("GET", "http://"+testHost+"/x", http.NoBody)
 	st := &station.Station{
 		ID: "RB_abc-123", Name: "Radio d'Alsace & Co", URL: "https://stream.example/live",
 		Tags: []string{"jazz", "soul"}, CountryCode: "FR", Codec: "MP3", Bitrate: 128, HasBitrate: true,
@@ -462,7 +466,7 @@ func TestStreamRelay(t *testing.T) {
 	front := httptest.NewServer(s.Routes())
 	defer front.Close()
 
-	req, _ := http.NewRequest("GET", front.URL+"/ycast/stream?id=RB_uuid-s", nil)
+	req, _ := http.NewRequest("GET", front.URL+"/ycast/stream?id=RB_uuid-s", http.NoBody)
 	req.Header.Set("Icy-MetaData", "1")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -489,14 +493,21 @@ func TestStreamRelay(t *testing.T) {
 		t.Errorf("Icy-MetaData request header not forwarded: %v", gotIcyReq.Load())
 	}
 
-	if r, _ := http.Get(front.URL + "/ycast/stream?id=RB_unknown"); r.StatusCode != http.StatusNotFound {
-		t.Errorf("unknown station: %d", r.StatusCode)
-	}
-	if r, _ := http.Get(front.URL + "/ycast/stream"); r.StatusCode != http.StatusBadRequest {
-		t.Errorf("missing id: %d", r.StatusCode)
-	}
-	if r, _ := http.Get(front.URL + "/ycast/stream?id=../../etc/passwd"); r.StatusCode != http.StatusNotFound {
-		t.Errorf("malicious id: %d", r.StatusCode)
+	// Error responses must have their body closed too (bodyclose).
+	for _, uri := range []string{"/ycast/stream?id=RB_unknown", "/ycast/stream", "/ycast/stream?id=../../etc/passwd"} {
+		r, err := front.Client().Get(front.URL + uri)
+		if err != nil {
+			t.Fatalf("%s: %v", uri, err)
+		}
+		r.Body.Close()
+		switch {
+		case uri == "/ycast/stream?id=RB_unknown" && r.StatusCode != http.StatusNotFound:
+			t.Errorf("unknown station: %d", r.StatusCode)
+		case uri == "/ycast/stream" && r.StatusCode != http.StatusBadRequest:
+			t.Errorf("missing id: %d", r.StatusCode)
+		case uri == "/ycast/stream?id=../../etc/passwd" && r.StatusCode != http.StatusNotFound:
+			t.Errorf("malicious id: %d", r.StatusCode)
+		}
 	}
 }
 
@@ -505,8 +516,8 @@ func TestStreamRelay(t *testing.T) {
 func testPNG(t *testing.T, w, h int) []byte {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			if x < w/2 {
 				img.SetNRGBA(x, y, color.NRGBA{200, 30, 30, 255}) // opaque red left half
 			} // right half stays fully transparent
@@ -531,7 +542,7 @@ func TestIconEndpointAndCache(t *testing.T) {
 	f.stations[1]["favicon"] = iconSrv.URL + "/logo.png" // uuid-a
 	h := s.Routes()
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		code, hdr, body := get(t, h, testHost, "/ycast/icon?id=RB_uuid-a")
 		if code != 200 || hdr.Get("Content-Type") != "image/jpeg" {
 			t.Fatalf("icon: %d %q", code, hdr.Get("Content-Type"))

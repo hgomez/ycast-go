@@ -105,6 +105,7 @@ type debugWriter struct {
 	buf    *bytes.Buffer // nil: do not capture
 }
 
+// WriteHeader records the status for the debug log before delegating.
 func (d *debugWriter) WriteHeader(code int) {
 	if d.status == 0 {
 		d.status = code
@@ -340,8 +341,9 @@ func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMyLanding(w http.ResponseWriter, r *http.Request) {
-	var dirs []radiobrowser.Directory
-	for _, c := range s.my.Categories() {
+	cats := s.my.Categories()
+	dirs := make([]radiobrowser.Directory, 0, len(cats))
+	for _, c := range cats {
 		dirs = append(dirs, radiobrowser.Directory{Name: c.Name, Display: c.Name, Count: len(c.Stations)})
 	}
 	writePage(w, s.directoriesPage(r, "/ycast/my_stations/", dirs))

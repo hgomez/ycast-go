@@ -249,3 +249,100 @@ port mapping; the version string is injected through a `VERSION` build arg.
 `debian:trixie-20261005-slim` in the Dockerfile, `debian:trixie-20261005` for
 the deb CI job, `fedora:44` for the rpm job. Bumping the pin is a deliberate,
 reviewable change.
+
+## 15. OpenWrt packages from the official SDK (ipk for 24.10, apk for 25.12)
+
+**Decision**: OpenWrt packages come from a native buildroot package Makefile
+(`packaging/openwrt/`), built in CI with the official OpenWrt SDKs, in a
+four-way matrix: release 24.10.8 (`opkg`, `.ipk`) and current snapshot
+(`apk-tools`, `.apk`) × `armsr/armv8` (`aarch64_generic`) and `armsr/armv7`
+(`arm_cortex-a15_neon-vfpv4`). The Go build goes through the packages feed's
+`golang-package.mk`; the package pulls the sources by git at a pinned commit
+SHA and installs the binary, a procd init script and
+`/etc/ycast/stations.yml.example`; `DEPENDS:=+ca-bundle` for the HTTPS trust
+store. The 24.10.8 SDK is pinned; the snapshot SDK cannot be pinned (it
+changes daily), so its sha256 is verified against upstream's published
+`sha256sums` at download time.
+
+**Why**: users asked for OpenWrt packages (`apk` for arm32/arm64). OpenWrt
+24.10 still ships opkg — a `.apk` only installs on the apk-based generation —
+so both formats are produced. Building inside the official SDK (instead of
+hand-crafting package files) is what guarantees installable metadata
+(architecture, dependencies, scripts), matches decision #13's "native
+packaging sources" philosophy and lets users rebuild for any of OpenWrt's
+other ARM sub-architectures with one documented command. A static Go binary
+runs on any ARMv7, but the package architecture is what the installer checks,
+so one arm32 arch had to be chosen (the generic `armsr/armv7` one).
+
+**Consequences**: CI gains a slow matrix job (the `golang/host` toolchain is
+built from source in each SDK, several minutes per job); the snapshot `.apk`
+files are unsigned
+(`apk add --allow-untrusted`); the arm32 package only installs as-is on
+architectures matching `arm_cortex-a15_neon-vfpv4` — documented in
+`packaging/openwrt/README.md`. None of this has been tested on real
+hardware; the README says so.
+
+**Amendment**: with the OpenWrt 25.12 release out, the two snapshot jobs are
+replaced by pinned 25.12.5 SDK jobs (same architectures
+`aarch64_generic`/`arm_cortex-a15_neon-vfpv4`, same `.apk` format); the
+"snapshot tracks a moving upstream" caveat is gone — all four SDKs are now
+version-pinned with sha256 verification.
+
+## 16. golangci-lint: curated config, not maximal strictness
+
+**Decision**: `golangci-lint` (v2) joins the project bar (`go vet`, `gofmt`,
+`go test -race`) with a curated `.golangci.yml`, run in CI from the pinned
+official binary (no third-party action). The linter set keeps the correctness
+and hygiene checks (govet, staticcheck, errcheck, errchkjson, gocritic,
+bodyclose, noctx, revive exported-comments, intrange, prealloc, misspell…).
+The contributed config was visibly imported from another codebase (a foreign
+company's internal GitLab module prefix in `gci`, gRPC ignores in
+`wrapcheck`, SQL/OTel linters); it was re-curated, and several linters were
+disabled on purpose: `sloglint`'s `attr-only` (the codebase logs with the
+idiomatic key-value form — 29 call sites), `wrapcheck` and `err113` (they
+forbid idiomatic `fmt.Errorf` and conflict with the documented
+graceful-degradation style), `funcorder`/`gocognit`/`maintidx` (cosmetic
+churn), `gocyclo` is kept as a guardrail at 25 with tests excluded.
+
+**Why**: a linter is a tool in service of the project's own conventions
+(AGENTS.md), not a license to rewrite the codebase in the linter's taste. The
+disabled checks had no correctness value here and would have produced ~85
+style-only changes (rewriting every log call, wrapping every stdlib error,
+re-ordering methods), increasing the diff and the risk on a codebase with
+byte-for-byte compatibility constraints. The ~45 real findings (response-body
+leaks in tests, `os.Exit` skipping deferred calls in `main`, missing API doc
+comments, `http.NoBody`, unchecked errors, integer ranges, preallocation)
+were all fixed instead.
+
+**Consequences**: CI runs golangci-lint (checksum-pinned binary, version
+following `mise.toml`); `.golangci.yml` documents each deviation at the top;
+`AGENTS.md` lists the new command. Any future "strictness" request must
+justify itself against this entry.
+
+## 17. golangci-lint: slimmed down to the essential set (amends #16)
+
+**Decision**: the curated config from #16 is replaced by a deliberately lean
+one: `errcheck` (with the same deliberate ignores), `govet`, `staticcheck`
+(which subsumes the removed-in-v2 `gosimple`/`stylecheck`), `ineffassign`,
+`unused`, `misspell`, `gosec` (with documented exclusions: G401/G501 for the
+required MD5 station IDs, G404 for the non-crypto `math/rand` shuffle, G104
+as errcheck's job, G705/G710 taint false positives on the XML generator and
+stream redirects), plus `bodyclose` and `noctx` — the two extra linters that
+caught real leaks in the tests. Removed: `gocritic`, `revive`, `intrange`,
+`prealloc`, `nilerr`, `nolintlint`, `containedctx`, `contextcheck`,
+`errchkjson`, `errname`, `gocyclo`, `copyloopvar`, `bidichk`, `asciicheck`,
+`nakedret`, `nilnil`, `unparam` and the formatters section (CI already runs
+`gofmt`; the gofumpt fixes stay applied). The fixes made under #16 stay in
+the code.
+
+**Why**: the maintainer found #16's set still too aggressive. The value of a
+linter set is not the number of linters but the findings; the two kept
+specialists (`bodyclose`, `noctx`) are the only ones that found defects the
+other checks cannot see. `gosec` joins because the project has genuine
+security surfaces (station IDs in file paths, an HTTP relay); its exclusions
+are each justified by a documented decision (the MD5 IDs, the XML generator).
+
+**Consequences**: `.golangci.yml` is the lean config with the rationale
+inlined; CI is unchanged (same pinned binary, same command). A rejected
+finding should default to a code fix or a targeted, explained `//nolint`
+(such as the icon-cache path read) rather than growing the exclusion list.
