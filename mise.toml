@@ -2,7 +2,7 @@
 gh = "latest"
 go = "1.26.3"
 golangci-lint = "2.14.0"
-"github:getplumber/plumber" = "0.6.3"
+"github:getplumber/plumber" = "0.6.4"
 
 # Keep the plumber pin current: mise run update-plumber (also run weekly by
 # .github/workflows/plumber.yml, which opens the PR).
