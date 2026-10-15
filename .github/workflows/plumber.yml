@@ -4,6 +4,8 @@ name: Plumber update
 # scripts/update-plumber.sh and docs/DECISIONS.md #18): the version is
 # always pinned exactly, and this workflow moves the pin when upstream
 # releases a new version. Dependabot does not cover mise github: tools.
+# The policy overlay is re-validated with the pinned version on every run,
+# so a manual pin bump gets validated too.
 
 on:
   schedule:
@@ -38,20 +40,28 @@ jobs:
               echo "version=$version"
             } >> "$GITHUB_OUTPUT"
           fi
-      # The new version gates the update: it must still accept our policy
-      # overlay and must not find regressions in the workflows it enforces.
-      - name: Validate the policy with the new version
-        if: steps.pin.outputs.changed == 'true'
+      # The pinned version gates the update — whether the pin was moved by
+      # the script above or bumped manually in a commit: it must still accept
+      # our policy overlay and must not find regressions in the workflows it
+      # enforces. Runs unconditionally so a manual bump is validated too
+      # (the update script is a no-op when the pin is already current).
+      - name: Validate the policy with the pinned version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version="${{ steps.pin.outputs.version }}"
+          version=$(sed -n 's/.*"github:getplumber\/plumber" = "\([^"]*\)".*/\1/p' mise.toml)
+          if [ -z "$version" ]; then
+            echo "error: no plumber pin found in mise.toml" >&2
+            exit 1
+          fi
+          echo "Validating with plumber ${version}"
           curl -sfL -o plumber "https://github.com/getplumber/plumber/releases/download/v${version}/plumber-linux-amd64"
           curl -sfL -o checksums.txt "https://github.com/getplumber/plumber/releases/download/v${version}/checksums.txt"
           grep "plumber-linux-amd64" checksums.txt | sha256sum -c -
           chmod +x plumber
           ./plumber config validate .plumber.yaml
-          ./plumber analyze .
+          # No target: inside a checkout, plumber uses the git remote.
+          ./plumber analyze
       - name: Open the update PR
         if: steps.pin.outputs.changed == 'true'
         env:

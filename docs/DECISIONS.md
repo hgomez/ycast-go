@@ -370,7 +370,10 @@ freshness, and the PR is gated by the policy validation so a plumber
 release that changes the baseline cannot slip in unnoticed. Dependabot
 does not cover mise `github:` tools, hence the small custom workflow.
 
-**Consequences**: one more scheduled workflow (cheap: no-op unless the pin
-moves); the weekly PR must be reviewed like any dependabot PR; if a new
-plumber version rejects the policy overlay, the update PR fails loudly
-instead of landing.
+**Consequences**: one more scheduled workflow (cheap: no PR unless the pin
+moves); the weekly run validates the policy with the version pinned in
+`mise.toml` **unconditionally** — so a manual pin bump is validated by the
+next scheduled run even though the script itself is a no-op — and the PR
+gate keeps the update script honest; the weekly PR must be reviewed like
+any dependabot PR; if a new plumber version rejects the policy overlay,
+the update PR (or the weekly validation) fails loudly instead of landing.
