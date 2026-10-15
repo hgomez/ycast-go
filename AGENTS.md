@@ -90,10 +90,13 @@ explained `//nolint`, never by growing the exclusion list by default.
   grouped PRs); go.mod and the `vendor/` tree move together — a PR with a
   stale `vendor/` must be fixed with `go mod vendor` before merge.
 - **Plumber pin** — the security-policy tool is always pinned to an exact
-  version in `mise.toml`, and the pin is kept current: `mise run
-  update-plumber` (or the weekly `.github/workflows/plumber.yml`, which
-  validates the policy with the new version and opens the PR). Dependabot
-  does not cover mise `github:` tools — see `docs/DECISIONS.md` #18.
+  version in `mise.toml`; bumps are manual and deliberate: `mise run
+  update-plumber` updates the pin, and the policy must be validated with
+  the new version (`plumber config validate` + `plumber analyze`) before
+  landing. The scan runs in CI via the official `getplumber/plumber`
+  action (the only third-party action, allowlisted in `.plumber.yaml`).
+  Dependabot does not cover mise `github:` tools — see
+  `docs/DECISIONS.md` #18.
 - Real hardware (an actual receiver, radio-browser.info in production) has
   never been used for testing: never claim in the README what has not been
   verified.

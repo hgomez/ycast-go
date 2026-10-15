@@ -1,5 +1,7 @@
 # YCast (Go edition)
 
+[![Plumber Score](https://score.getplumber.io/github.com/hgomez/ycast-go.svg)](https://score.getplumber.io/github.com/hgomez/ycast-go)
+
 Self-hosted replacement for the **vTuner** internet radio service used by many
 network receivers (Denon, Marantz, Yamaha, Onkyo…). It puts your own stations
 in the receiver's "Internet Radio" menu, so **the front-panel controls work

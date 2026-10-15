@@ -347,33 +347,41 @@ inlined; CI is unchanged (same pinned binary, same command). A rejected
 finding should default to a code fix or a targeted, explained `//nolint`
 (such as the icon-cache path read) rather than growing the exclusion list.
 
-## 18. Plumber: exact pin + weekly automated update of the pin
+## 18. Plumber: exact pin, enforced in CI by the official action
 
 **Decision**: plumber (the CI/CD security-policy analyzer behind
 `.plumber.yaml`) is pinned to an exact version in `mise.toml` — never
-`latest` — and the pin is kept current by two mechanisms: `mise run
-update-plumber` (`scripts/update-plumber.sh`: reads the latest stable GitHub
-release, never downgrades, rewrites the pin) and a weekly scheduled workflow
-(`.github/workflows/plumber.yml`) that runs the script, re-validates the
-policy overlay (`plumber config validate`) and re-analyzes the workflows
-(`plumber analyze`) **with the new version**, then opens a `chore: pin
-plumber to X.Y.Z` PR. The commit is created through the REST API (blob →
-tree → commit → ref → PR) because checkouts keep
-`persist-credentials: false`; the new binary is downloaded with
-`checksums.txt` verification.
+`latest` — and the pin is updated manually with `mise run update-plumber`
+(`scripts/update-plumber.sh`: reads the latest stable GitHub release, never
+downgrades, rewrites the pin). The analysis itself runs in CI
+(`.github/workflows/plumber.yml`) through the **official**
+`getplumber/plumber` GitHub Action, SHA-pinned to the release matching the
+mise.toml pin, with the installed binary verified against `checksums.txt`
+and its SLSA build-provenance attestation by the action. Findings are
+uploaded to GitHub Code Scanning (SARIF), CI is gated on `min-score: "A"`
+instead of the default 100-points gate, and `score-push: true` publishes
+the live Plumber Score badge shown in the README.
+
+This is the **one deliberate third-party action** in an otherwise
+GitHub-owned-only setup: it is allowed explicitly in the
+`githubActionMustComeFromAuthorizedSources` overlay in `.plumber.yaml`, so
+the policy tool polices its own dependency. An earlier weekly scheduled
+workflow that auto-bumped the pin was removed on purpose: a pin bump must
+be a reviewed, deliberate change.
 
 **Why**: a policy tool is part of the supply chain: a floating `latest`
 would make builds non-reproducible and let a plumber release change the
-security gate silently, while a static pin rots and drifts from the
-baseline. Pinned + automated update gives both reproducibility and
-freshness, and the PR is gated by the policy validation so a plumber
-release that changes the baseline cannot slip in unnoticed. Dependabot
-does not cover mise `github:` tools, hence the small custom workflow.
+security gate silently. The pin gives reproducibility; running the scan on
+every push/PR (not on a weekly schedule) means a policy regression is
+detected in the change that introduced it, not days later. `min-score: A`
+keeps CI green for minor findings (they still land in Code Scanning)
+while a real exposure cannot pass. The badge is published via CI-native
+OIDC (`id-token: write`), no secret involved.
 
-**Consequences**: one more scheduled workflow (cheap: no PR unless the pin
-moves); the weekly run validates the policy with the version pinned in
-`mise.toml` **unconditionally** — so a manual pin bump is validated by the
-next scheduled run even though the script itself is a no-op — and the PR
-gate keeps the update script honest; the weekly PR must be reviewed like
-any dependabot PR; if a new plumber version rejects the policy overlay,
-the update PR (or the weekly validation) fails loudly instead of landing.
+**Consequences**: the pin can drift from upstream between manual updates;
+that is acceptable for a security gate that should only move on purpose.
+When bumping the pin, both the mise.toml pin and the action SHA (plus its
+trailing version comment) move together, and the policy overlay must be
+validated with the new version (`plumber config validate` + `plumber
+analyze`) before landing; if a new plumber version rejects the policy
+overlay, local validation fails loudly instead of the change landing.

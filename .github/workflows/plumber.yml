@@ -1,96 +1,39 @@
-name: Plumber update
+name: Plumber
 
-# Keeps the plumber pin in mise.toml at the latest stable release (see
-# scripts/update-plumber.sh and docs/DECISIONS.md #18): the version is
-# always pinned exactly, and this workflow moves the pin when upstream
-# releases a new version. Dependabot does not cover mise github: tools.
-# The policy overlay is re-validated with the pinned version on every run,
-# so a manual pin bump gets validated too.
+# CI/CD security scan of this repository's workflows (see .plumber.yaml,
+# docs/DECISIONS.md #18). Findings are uploaded to Code Scanning (SARIF) and
+# the Plumber Score is published as a public badge (score-push), which is
+# why the job needs security-events: write and id-token: write.
 
 on:
-  schedule:
-    - cron: "30 5 * * 1" # Mondays 05:30 UTC
-  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  update:
-    name: Pin the latest plumber release
+  plumber:
+    name: CI/CD security scan
     runs-on: ubuntu-latest
     permissions:
-      contents: write # branch + commit created through the REST API
-      pull-requests: write
+      contents: read
+      security-events: write # SARIF upload to Code Scanning
+      id-token: write # OIDC for the hosted score badge (score-push)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (node24)
         with:
           persist-credentials: false
-      - name: Update the pin in mise.toml
-        run: ./scripts/update-plumber.sh
-      - name: Check whether the pin moved
-        id: pin
-        run: |
-          if git diff --quiet mise.toml; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            version=$(sed -n 's/.*"github:getplumber\/plumber" = "\([^"]*\)".*/\1/p' mise.toml)
-            {
-              echo "changed=true"
-              echo "version=$version"
-            } >> "$GITHUB_OUTPUT"
-          fi
-      # The pinned version gates the update — whether the pin was moved by
-      # the script above or bumped manually in a commit: it must still accept
-      # our policy overlay and must not find regressions in the workflows it
-      # enforces. Runs unconditionally so a manual bump is validated too
-      # (the update script is a no-op when the pin is already current).
-      - name: Validate the policy with the pinned version
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          version=$(sed -n 's/.*"github:getplumber\/plumber" = "\([^"]*\)".*/\1/p' mise.toml)
-          if [ -z "$version" ]; then
-            echo "error: no plumber pin found in mise.toml" >&2
-            exit 1
-          fi
-          echo "Validating with plumber ${version}"
-          curl -sfL -o plumber "https://github.com/getplumber/plumber/releases/download/v${version}/plumber-linux-amd64"
-          curl -sfL -o checksums.txt "https://github.com/getplumber/plumber/releases/download/v${version}/checksums.txt"
-          grep "plumber-linux-amd64" checksums.txt | sha256sum -c -
-          chmod +x plumber
-          ./plumber config validate .plumber.yaml
-          # No target: inside a checkout, plumber uses the git remote.
-          ./plumber analyze
-      - name: Open the update PR
-        if: steps.pin.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          version="${{ steps.pin.outputs.version }}"
-          branch="chore/plumber-${version}"
-          base_sha=$(git rev-parse HEAD)
-
-          # All writes go through the REST API: the checkout has
-          # persist-credentials: false, so no git push here.
-          gh api -X DELETE "repos/${GH_REPO}/git/refs/heads/${branch}" >/dev/null 2>&1 || true
-          gh api -X POST "repos/${GH_REPO}/git/refs" \
-            -f "ref=refs/heads/${branch}" -f "sha=${base_sha}" >/dev/null
-
-          blob=$(gh api -X POST "repos/${GH_REPO}/git/blobs" \
-            -f "content=$(base64 -w0 mise.toml)" -f "encoding=base64" --jq '.sha')
-          base_tree=$(gh api "repos/${GH_REPO}/git/commits/${base_sha}" --jq '.tree.sha')
-          tree=$(jq -n --arg blob "$blob" --arg base "$base_tree" \
-            '{base_tree: $base, tree: [{path: "mise.toml", mode: "100644", type: "blob", sha: $blob}]}' |
-            gh api -X POST "repos/${GH_REPO}/git/trees" --input - --jq '.sha')
-          commit=$(gh api -X POST "repos/${GH_REPO}/git/commits" \
-            -f "message=chore: pin plumber to ${version}" \
-            -f "tree=${tree}" -f "parents[]=${base_sha}" --jq '.sha')
-          gh api -X PATCH "repos/${GH_REPO}/git/refs/heads/${branch}" -f "sha=${commit}" >/dev/null
-
-          body=$(printf 'Automated plumber pin update (%s).\n\n- mise.toml pin: `%s`\n- policy overlay re-validated and analyzed with the new version\n\nSee docs/DECISIONS.md #18.' \
-            "${version}" "${version}")
-          gh api -X POST "repos/${GH_REPO}/pulls" \
-            -f "title=chore: pin plumber to ${version}" \
-            -f "head=${branch}" -f "base=main" -f "body=${body}" --jq '.html_url'
+      # The one deliberate third-party action in this repository (allowed
+      # in .plumber.yaml): SHA-pinned to the release matching the mise.toml
+      # pin, and the binary it installs is verified against checksums.txt
+      # and its SLSA build-provenance attestation.
+      - uses: getplumber/plumber@669507c3cc8282406ae58816823fd84a32752633 # v0.6.4
+        with:
+          version: v0.6.4 # follows the mise.toml pin
+          # Gate on the grade (>= 90/100), not on the default 100-points
+          # gate: a minor finding should surface in Code Scanning without
+          # breaking CI, a real exposure should not pass.
+          min-score: "A"
+          score-push: true # publishes the live badge for the README

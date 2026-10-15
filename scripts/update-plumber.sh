@@ -2,8 +2,9 @@
 # Updates the plumber pin in mise.toml to the latest stable release.
 #
 # The project's rule (see AGENTS.md, RELEASING.md): plumber is always pinned
-# to an exact version, and the pin is kept up to date — this script is run
-# locally (mise run update-plumber) and weekly by the plumber.yml workflow.
+# to an exact version and the pin is updated manually — run this script
+# locally (mise run update-plumber) and validate the policy with the new
+# version before landing the bump.
 #
 # Exit codes: 0 = up to date or updated, 1 = error (API unreachable, weird
 # version...). A downgrade is never applied.

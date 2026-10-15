@@ -4,8 +4,8 @@ go = "1.26.3"
 golangci-lint = "2.14.0"
 "github:getplumber/plumber" = "0.6.4"
 
-# Keep the plumber pin current: mise run update-plumber (also run weekly by
-# .github/workflows/plumber.yml, which opens the PR).
+# Keep the plumber pin current: mise run update-plumber (manual; the pin is
+# not auto-updated — see docs/DECISIONS.md #18).
 [tasks.update-plumber]
 description = "Pin mise.toml to the latest plumber release"
 run = "./scripts/update-plumber.sh"

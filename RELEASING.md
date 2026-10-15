@@ -102,8 +102,12 @@ writing) and `AGENTS.md`:
 - only GitHub-owned actions (`actions/*`), each pinned to a commit SHA;
 - images pinned by digest (manifest-list digests, valid for multi-arch);
 - tools in `mise.toml` are pinned to exact versions; the plumber pin is
-  moved weekly by `.github/workflows/plumber.yml` (PR with the new pin,
-  policy re-validated with the new version before the PR opens);
+  updated manually (`mise run update-plumber`), with the policy
+  re-validated with the new version before the bump lands;
+- the plumber scan itself runs on every push/PR through the official
+  `getplumber/plumber` action (SHA-pinned, the only third-party action,
+  allowlisted in `.plumber.yaml`), gated on `min-score: "A"`, SARIF in
+  Code Scanning and the score published as a public badge;
 - OpenWrt SDKs pinned by version (24.10.8 for the `.ipk` jobs, 25.12.5 for
   the `.apk` jobs), each download verified over HTTPS against upstream's
   published `sha256sums`;

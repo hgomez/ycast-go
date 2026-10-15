@@ -7,16 +7,22 @@ extends: plumber:default
 
 github:
   controls:
-    # This repository deliberately uses NO third-party actions: only
-    # actions/* (checkout, setup-go, upload/download-artifact). The default
+    # This repository deliberately uses no third-party actions beyond the
+    # plumber security scan itself: only actions/* (checkout, setup-go,
+    # upload/download-artifact) and getplumber/plumber. The default
     # star-threshold/allowlist profile is therefore tightened to an explicit
-    # empty allowlist — anything outside actions/* fails the gate.
+    # allowlist of exactly that one action — anything else outside actions/*
+    # fails the gate.
     githubActionMustComeFromAuthorizedSources:
       enabled: true
       trustGithubOfficialActions: true
       trustSameOrgActions: true
       minimumStars: 0
-      trustedGithubActions: []
+      trustedGithubActions:
+        # The plumber security scan itself is the one deliberate third-party
+        # action: SHA-pinned, binary checksum- and attestation-verified
+        # (docs/DECISIONS.md #18).
+        - getplumber/plumber
 
     # The "workflows must include required actions" control is an
     # organisation-level policy (a universal action list does not exist);
