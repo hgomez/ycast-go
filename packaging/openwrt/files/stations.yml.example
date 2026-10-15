@@ -1,0 +1,13 @@
+# Sample stations.yml: categories at the top level, "Station name: URL" below.
+# Names containing ": " must be quoted. HTTPS streams are accepted (relayed by
+# the server; the Denon cannot do TLS). The URLs below are examples only:
+# check them before use.
+
+Chillout:
+  SomaFM Groove Salad: http://ice1.somafm.com/groovesalad-256-mp3
+  SomaFM Drone Zone: http://ice1.somafm.com/dronezone-256-mp3
+  "SomaFM: Lush": http://ice1.somafm.com/lush-128-mp3
+
+France:
+  FIP: https://icecast.radiofrance.fr/fip-midfi.mp3
+  France Inter: https://icecast.radiofrance.fr/franceinter-midfi.mp3

@@ -29,6 +29,15 @@ jobs:
           fi
       - name: go vet
         run: go vet ./...
+      # Official binary release, sha256-pinned (no third-party action per the
+      # project security policy). Version follows mise.toml.
+      - name: golangci-lint
+        run: |
+          curl -sfL -o gcl.tar.gz \
+            https://github.com/golangci/golangci-lint/releases/download/v2.14.0/golangci-lint-2.14.0-linux-amd64.tar.gz
+          echo 'ab90aeb7b066f92a33415b638a50fe5344bbb75a0d32ad30cc248d88f81032ab  gcl.tar.gz' | sha256sum -c -
+          tar -xzf gcl.tar.gz
+          ./golangci-lint-2.14.0-linux-amd64/golangci-lint run ./...
       - name: go test
         run: go test -race -count=1 ./...
 

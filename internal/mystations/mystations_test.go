@@ -1,7 +1,6 @@
 package mystations
 
 import (
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -13,7 +12,7 @@ import (
 )
 
 func discardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return slog.New(slog.DiscardHandler)
 }
 
 func writeStationsFile(t *testing.T, content string) string {
@@ -42,7 +41,7 @@ func TestParseStationsYAML(t *testing.T) {
 	if len(cats) != 2 || cats[0].Name != "Electronic" || cats[1].Name != "Chillout" {
 		t.Fatalf("categories: %+v", cats)
 	}
-	var got [][2]string
+	got := make([][2]string, 0, len(cats[0].Stations))
 	for _, s := range cats[0].Stations {
 		got = append(got, [2]string{s.Name, s.URL})
 	}

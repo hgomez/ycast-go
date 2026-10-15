@@ -60,7 +60,9 @@ func (c *Cache) Get(ctx context.Context, s *station.Station) ([]byte, error) {
 	var file string
 	if c.dir != "" {
 		file = filepath.Join(c.dir, s.ID+".jpg")
-		if data, err := os.ReadFile(file); err == nil {
+		// Safe: s.ID is validated by validStationID (restricted alphabet,
+		// see internal/station) — IDs never contain path separators.
+		if data, err := os.ReadFile(file); err == nil { //nolint:gosec // G304: validated station ID, see comment above
 			return data, nil
 		}
 	}
@@ -85,7 +87,7 @@ func (c *Cache) download(ctx context.Context, u string) ([]byte, error) {
 	if !strings.HasPrefix(strings.ToLower(u), "http://") && !strings.HasPrefix(strings.ToLower(u), "https://") {
 		return nil, fmt.Errorf("unsupported icon URL scheme: %s", u)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +111,7 @@ func (c *Cache) download(ctx context.Context, u string) ([]byte, error) {
 }
 
 func writeFileAtomic(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".icon-*")
@@ -119,11 +121,11 @@ func writeFileAtomic(path string, data []byte) error {
 	_, werr := tmp.Write(data)
 	cerr := tmp.Close()
 	if werr != nil || cerr != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name()) // best-effort cleanup, the write already failed
 		return errors.Join(werr, cerr)
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name()) // best-effort cleanup, the rename already failed
 		return err
 	}
 	return nil

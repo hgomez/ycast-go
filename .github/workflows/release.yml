@@ -81,6 +81,70 @@ jobs:
           name: rpm
           path: dist/*.rpm
 
+  # OpenWrt packages, built with the official SDKs (packaging/openwrt/).
+  # 24.10 uses opkg (.ipk); the .apk format (apk-tools) is the snapshot / 25.x
+  # generation. The 24.10.8 SDK is pinned; the snapshot SDK moves daily, so
+  # its sha256 is verified against upstream's published sha256sums at
+  # download time instead. arm32 arch is arm_cortex-a15_neon-vfpv4 (generic
+  # armsr/armv7 target); other ARM sub-archs rebuild from the same sources
+  # with the matching SDK (see packaging/openwrt/README.md).
+  openwrt:
+    name: OpenWrt package (${{ matrix.version }} ${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { version: "24.10.8", target: "armsr/armv8", ext: ipk }
+          - { version: "24.10.8", target: "armsr/armv7", ext: ipk }
+          - { version: "snapshot", target: "armsr/armv8", ext: apk }
+          - { version: "snapshot", target: "armsr/armv7", ext: apk }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (node24)
+        with:
+          persist-credentials: false
+      - name: Download and verify the SDK
+        run: |
+          if [ "${{ matrix.version }}" = snapshot ]; then
+            base="https://downloads.openwrt.org/snapshots/targets/${{ matrix.target }}"
+          else
+            base="https://downloads.openwrt.org/releases/${{ matrix.version }}/targets/${{ matrix.target }}"
+          fi
+          sdk=$(curl -sf "$base/" | grep -oE 'openwrt-sdk-[^"<]*\.tar\.zst' | head -n1)
+          echo "SDK: $base/$sdk"
+          expected=$(curl -sf "$base/sha256sums" | awk -v f="*$sdk" '$2 == f {print $1}')
+          [ -n "$expected" ] || { echo "no sha256 found for $sdk"; exit 1; }
+          curl -sf -o sdk.tar.zst "$base/$sdk"
+          echo "$expected  sdk.tar.zst" | sha256sum -c -
+          tar --zstd -xf sdk.tar.zst
+          mv openwrt-sdk-* sdk
+      - name: Install the package sources in the SDK
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$VERSION/" packaging/openwrt/Makefile
+          sed -i "s/^PKG_SOURCE_VERSION:=.*/PKG_SOURCE_VERSION:=$(git rev-parse HEAD)/" packaging/openwrt/Makefile
+          mkdir -p sdk/package/ycast-go/files
+          cp packaging/openwrt/Makefile sdk/package/ycast-go/
+          cp packaging/openwrt/files/* sdk/package/ycast-go/files/
+      - name: Build the package
+        run: |
+          cd sdk
+          ./scripts/feeds update packages
+          ./scripts/feeds install golang
+          echo 'CONFIG_PACKAGE_ycast-go=m' >> .config
+          make defconfig
+          make package/ycast-go/compile V=s
+      - name: Collect the package
+        run: |
+          mkdir -p dist
+          find sdk/bin/packages -name 'ycast-go*' -exec mv {} dist/ \;
+          ls -la dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (node24)
+        with:
+          name: openwrt-${{ matrix.version }}-${{ matrix.ext }}-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
   # The image is built natively on each architecture runner (no QEMU, no
   # docker/* actions: those download tooling at run time and cannot be
   # verified statically), then the two per-arch images are merged into a
@@ -174,7 +238,7 @@ jobs:
 
   release:
     name: Publish release
-    needs: [binaries, deb, rpm]
+    needs: [binaries, deb, rpm, openwrt]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2 (node24)
@@ -189,4 +253,5 @@ jobs:
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
             gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
           gh release upload "$GITHUB_REF_NAME" --clobber \
-            artifacts/*.deb artifacts/*.rpm artifacts/ycast-go-linux-*
+            artifacts/*.deb artifacts/*.rpm artifacts/ycast-go-linux-* \
+            artifacts/*.ipk artifacts/*.apk

@@ -12,6 +12,8 @@ import (
 	"strings"
 )
 
+// Exact vTuner XML preamble. Byte-for-byte compatible with the original
+// Python output (see DECISIONS.md #2) — do not touch.
 const (
 	XMLHeader = `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>`
 	InitToken = `<EncryptedToken>0000000000000000</EncryptedToken>`
@@ -82,6 +84,8 @@ func MessagePage(text string) *Page {
 // DisplayItem is a single text line the receiver shows as-is.
 type DisplayItem struct{ Text string }
 
+// WriteXML renders the item into the builder, byte-for-byte compatible with
+// the original Python output — do not touch.
 func (d DisplayItem) WriteXML(b *strings.Builder) {
 	b.WriteString("<Item>")
 	writeElem(b, "ItemType", "Display")
@@ -96,6 +100,8 @@ type DirItem struct {
 	Count int
 }
 
+// WriteXML renders the item into the builder, byte-for-byte compatible with
+// the original Python output — do not touch.
 func (d DirItem) WriteXML(b *strings.Builder) {
 	b.WriteString("<Item>")
 	writeElem(b, "ItemType", "Dir")
@@ -113,6 +119,8 @@ type StationItem struct {
 	Bitrate                   string
 }
 
+// WriteXML renders the item into the builder, byte-for-byte compatible with
+// the original Python output — do not touch.
 func (s StationItem) WriteXML(b *strings.Builder) {
 	b.WriteString("<Item>")
 	writeElem(b, "ItemType", "Station")

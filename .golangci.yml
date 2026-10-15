@@ -1,128 +1,76 @@
+# golangci-lint configuration — deliberately lean.
+#
+# History: PR #2 imported a maximalist config from another codebase (133
+# findings, ~85 style-only); it was re-curated (DECISIONS.md #16), then
+# slimmed down further to this set (DECISIONS.md #17). The rule: a linter
+# stays only if it is correct (no known false positives here) and catches
+# real problems. Style enforcement is left to gofmt (checked in CI).
+#
+# Notes:
+# - `gosimple` and `stylecheck` no longer exist in golangci-lint v2: they are
+#   merged into `staticcheck`.
+# - `vendor/` is never linted (the Go toolchain excludes it from ./...), so
+#   no explicit exclusion is needed.
+# - gosec exclusions are documented below; the md5 ones are a compatibility
+#   requirement, not an oversight (station IDs, DECISIONS.md #3).
 version: "2"
+
+run:
+  timeout: 5m
+
 linters:
   default: none
   enable:
-    - asciicheck
-    - bidichk
-    - bodyclose
-    - containedctx
-    - contextcheck
-    - copyloopvar
-    - err113
-    - errcheck
-    - errchkjson
-    - errname
-    - gocognit
-    - goconst
-    - gocritic
-    - gocyclo
+    - bodyclose   # leaked response bodies (caught real leaks in the tests)
+    - errcheck    # unchecked errors (with the deliberate-ignores below)
+    - gosec       # security-oriented checks (see exclusions)
     - govet
     - ineffassign
-    - intrange
-    - maintidx
     - misspell
-    - nakedret
-    - nilerr
-    - nilnil
-    - noctx
-    - nolintlint
-    - prealloc
-    - revive
-    - rowserrcheck
-    - sloglint
-    - spancheck
-    - sqlclosecheck
-    - staticcheck
-    - unconvert
-    - unparam
+    - noctx       # context-less HTTP requests (caught one in the tests)
+    - staticcheck # includes the old gosimple and stylecheck
     - unused
-    - wrapcheck
-    - funcorder
   settings:
-    errchkjson:
-      check-error-free-encoding: true
     errcheck:
       check-type-assertions: true
       exclude-functions:
         - (*net/http.Server).Shutdown(context.Context)
-        - (*database/sql.Rows).Close
-        - (*database/sql.DB).Close
+        - (*net/http.Server).Close
         - (io.Closer).Close
         - (net.Conn).Close
-    gocritic:
-      enabled-tags:
-        - diagnostic
-        - style
-        - performance
-        - opinionated
-        - experimental
-    gocyclo:
-      min-complexity: 10
-    nolintlint:
-      require-explanation: true
-      require-specific: true
-      allow-no-explanation:
-        - errcheck
-        - misspell
-      allow-unused: false
-    revive:
-      rules:
-        - name: exported
-          arguments:
-            - checkPrivateReceivers
-            - disableStutteringCheck
-          severity: warning
-          disabled: false
-        - name: package-comments
-          severity: warning
-          disabled: true
-    sloglint:
-      attr-only: true
-    spancheck:
-      checks:
-        - end
-    wrapcheck:
-      ignore-package-globs:
-        - google.golang.org/grpc/status
-        - google.golang.org/grpc/internal/status
-    funcorder:
-      constructor: true
-      struct-method: true
+        # Handlers that best-effort write a static response: the request is
+        # gone or the connection is broken, there is nothing to do about it.
+        - (net/http.ResponseWriter).Write
+    gosec:
+      excludes:
+        # Unchecked errors are errcheck's job (it has the project's list of
+        # deliberate ignores, e.g. best-effort ResponseWriter writes); gosec
+        # does not honor errcheck's exclusions and would duplicate it.
+        - G104 # errors unhandled
+        # MD5 of name+url is REQUIRED: station IDs must stay identical to
+        # the original YCast Python (presets stored on receivers reference
+        # them) — see DECISIONS.md #3. Not a password hash.
+        - G401 # weak cryptographic primitive
+        - G501 # blocklisted import crypto/md5
+        # math/rand shuffles Radio Browser server order; no security use.
+        - G404 # weak random number generator
+        # The /ycast/... redirects point at the station's stream URL on
+        # purpose (that is the whole job of the relay).
+        - G710 # open redirect via taint analysis
+        # Responses are the vTuner XML built by internal/vtuner (station
+        # names escaped by its xmlEscaper) or JPEG bytes from the icon
+        # cache; gosec's taint analysis cannot see either and flags both.
+        - G705 # XSS via taint analysis
   exclusions:
     generated: lax
     rules:
-      - linters:
-          - err113
-          - maintidx
-        path: (.+)_test.go
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+      # Tests may write fixtures with normal permissions, cast ints to bytes
+      # and skip error checks on test setup.
+      - path: (.+)_test\.go
+        linters:
+          - errcheck
+          - gosec
+          - noctx
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-formatters:
-  enable:
-    - gci
-    - gofmt
-    - gofumpt
-    - golines
-  settings:
-    golines:
-      max-len: 150
-      reformat-tags: false
-    gci:
-      sections:
-        - standard
-        - default
-        - prefix(gitlab.tooling.cloudgouv-eu-west-1.numspot.internal)
-        - localmodule
-        - blank
-        - dot
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$

@@ -68,7 +68,18 @@ func main() {
 	} else {
 		log = slog.New(slog.NewTextHandler(os.Stderr, opts))
 	}
-	log.Info("YCast server starting", "version", version)
+
+	// os.Exit lives here, outside of run(): any deferred call inside run()
+	// (signal context release) must run before the process exits.
+	if err := run(cfg, port, log); err != nil {
+		os.Exit(1)
+	}
+}
+
+// run serves until the first fatal error (returned) or a signal (graceful
+// shutdown, nil return).
+func run(cfg server.Config, port int, log *slog.Logger) error {
+	log.Info("YCast server starting", "version", cfg.Version)
 
 	srv := server.New(cfg, log)
 	if cfg.StationsFile != "" {
@@ -97,15 +108,18 @@ func main() {
 		} else {
 			log.Error("server failed", "err", err)
 		}
-		os.Exit(1)
+		return err
 	case <-ctx.Done():
 		log.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
-			httpSrv.Close() // active streams did not end in time
+			// Deliberate: active streams did not end in time, the sockets are
+			// torn down whatever the error.
+			_ = httpSrv.Close()
 		}
 	}
+	return nil
 }
 
 func isPermissionError(err error) bool {

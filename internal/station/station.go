@@ -31,6 +31,8 @@ func (s *Station) Genre() string {
 	return s.Tags[0]
 }
 
+// Station ID prefixes: MyPrefix marks stations from stations.yml, RBPrefix
+// stations from Radio Browser.
 const (
 	MyPrefix = "MY" // stations from stations.yml
 	RBPrefix = "RB" // stations from Radio Browser

@@ -11,11 +11,15 @@ audio receivers can digest.
 go build -trimpath -ldflags "-s -w" -o ycast-go ./cmd/ycast-go   # build
 go vet ./...                              # must stay clean
 gofmt -l cmd internal                # must stay empty (vendored code excluded)
+golangci-lint run ./...                   # must stay clean (see .golangci.yml)
 go test -race ./...                       # all tests must pass
 ```
 
-No Makefile, no CI: this is a single-package project, those four commands are
-all there is.
+No Makefile; this is a single-package project, those commands are all there
+is. `golangci-lint` is pinned in `mise.toml` (v2, config `.golangci.yml`) —
+its deviations from maximal strictness are documented at the top of that
+file: log with the idiomatic key-value form, do not wrap every stdlib error,
+do not re-order functions for the linter.
 
 ## Non-negotiable rules
 
