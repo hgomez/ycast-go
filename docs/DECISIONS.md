@@ -358,9 +358,11 @@ downgrades, rewrites the pin). The analysis itself runs in CI
 `getplumber/plumber` GitHub Action, SHA-pinned to the release matching the
 mise.toml pin, with the installed binary verified against `checksums.txt`
 and its SLSA build-provenance attestation by the action. Findings are
-uploaded to GitHub Code Scanning (SARIF), CI is gated on `min-score: "A"`
-instead of the default 100-points gate, and `score-push: true` publishes
-the live Plumber Score badge shown in the README.
+uploaded to GitHub Code Scanning (SARIF), CI is gated at `min-points: 100`
+(any finding fails the job), and `score-push: true` publishes the live
+Plumber Score badge shown in the README. The job is a **required status
+check** on `main` alongside the CI checks, so a pull request that degrades
+the score cannot be merged.
 
 This is the **one deliberate third-party action** in an otherwise
 GitHub-owned-only setup: it is allowed explicitly in the
@@ -373,10 +375,13 @@ be a reviewed, deliberate change.
 would make builds non-reproducible and let a plumber release change the
 security gate silently. The pin gives reproducibility; running the scan on
 every push/PR (not on a weekly schedule) means a policy regression is
-detected in the change that introduced it, not days later. `min-score: A`
-keeps CI green for minor findings (they still land in Code Scanning)
-while a real exposure cannot pass. The badge is published via CI-native
-OIDC (`id-token: write`), no secret involved.
+detected in the change that introduced it, not days later. The 100-points
+gate plus the required status check make the score monotonic: a merge
+cannot lower it, and a fix is needed to raise it. The badge is published
+via CI-native OIDC (`id-token: write`), no secret involved. The cost of
+the strict gate — a new plumber release surfacing a new finding breaks CI
+— is deliberate: it fails loudly, and the version bump is validated
+manually before landing anyway.
 
 **Consequences**: the pin can drift from upstream between manual updates;
 that is acceptable for a security gate that should only move on purpose.

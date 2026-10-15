@@ -114,8 +114,10 @@ writing) and `AGENTS.md`:
 - no third-party release action — publishing uses the preinstalled `gh` CLI;
 - `persist-credentials: false` on every checkout;
 - per-job `permissions:` (least privilege);
-- `main` is branch-protected (force-push and deletion forbidden, CI checks
-  required on PRs);
+- `main` is branch-protected (force-push and deletion forbidden, PR
+  approval required, status checks required: the CI jobs and the plumber
+  gate — a PR that degrades the Plumber Score cannot be merged, see
+  `docs/DECISIONS.md` #18);
 - dependencies are vendored, so the deb/rpm builds fetch nothing from the
   network except their own base image packages.
 
