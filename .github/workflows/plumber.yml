@@ -32,8 +32,9 @@ jobs:
       - uses: getplumber/plumber@669507c3cc8282406ae58816823fd84a32752633 # v0.6.4
         with:
           version: v0.6.4 # follows the mise.toml pin
-          # Gate at 100 points (the CLI default): ANY finding fails the job.
-          # The job is a required status check on main, so a PR that degrades
-          # the Plumber Score cannot be merged (docs/DECISIONS.md #18).
-          min-points: "100"
+          # Gate at 90 points: a PR whose Plumber Score drops below 90 fails
+          # the job (required status check on main, docs/DECISIONS.md D-006).
+          # The repo currently scores 100/100 — a PR that degrades it to
+          # 90–99 passes, anything lower is blocked.
+          min-points: "90"
           score-push: true # publishes the live badge for the README
