@@ -346,3 +346,31 @@ are each justified by a documented decision (the MD5 IDs, the XML generator).
 inlined; CI is unchanged (same pinned binary, same command). A rejected
 finding should default to a code fix or a targeted, explained `//nolint`
 (such as the icon-cache path read) rather than growing the exclusion list.
+
+## 18. Plumber: exact pin + weekly automated update of the pin
+
+**Decision**: plumber (the CI/CD security-policy analyzer behind
+`.plumber.yaml`) is pinned to an exact version in `mise.toml` — never
+`latest` — and the pin is kept current by two mechanisms: `mise run
+update-plumber` (`scripts/update-plumber.sh`: reads the latest stable GitHub
+release, never downgrades, rewrites the pin) and a weekly scheduled workflow
+(`.github/workflows/plumber.yml`) that runs the script, re-validates the
+policy overlay (`plumber config validate`) and re-analyzes the workflows
+(`plumber analyze`) **with the new version**, then opens a `chore: pin
+plumber to X.Y.Z` PR. The commit is created through the REST API (blob →
+tree → commit → ref → PR) because checkouts keep
+`persist-credentials: false`; the new binary is downloaded with
+`checksums.txt` verification.
+
+**Why**: a policy tool is part of the supply chain: a floating `latest`
+would make builds non-reproducible and let a plumber release change the
+security gate silently, while a static pin rots and drifts from the
+baseline. Pinned + automated update gives both reproducibility and
+freshness, and the PR is gated by the policy validation so a plumber
+release that changes the baseline cannot slip in unnoticed. Dependabot
+does not cover mise `github:` tools, hence the small custom workflow.
+
+**Consequences**: one more scheduled workflow (cheap: no-op unless the pin
+moves); the weekly PR must be reviewed like any dependabot PR; if a new
+plumber version rejects the policy overlay, the update PR fails loudly
+instead of landing.

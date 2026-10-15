@@ -1,0 +1,86 @@
+name: Plumber update
+
+# Keeps the plumber pin in mise.toml at the latest stable release (see
+# scripts/update-plumber.sh and docs/DECISIONS.md #18): the version is
+# always pinned exactly, and this workflow moves the pin when upstream
+# releases a new version. Dependabot does not cover mise github: tools.
+
+on:
+  schedule:
+    - cron: "30 5 * * 1" # Mondays 05:30 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    name: Pin the latest plumber release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # branch + commit created through the REST API
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (node24)
+        with:
+          persist-credentials: false
+      - name: Update the pin in mise.toml
+        run: ./scripts/update-plumber.sh
+      - name: Check whether the pin moved
+        id: pin
+        run: |
+          if git diff --quiet mise.toml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            version=$(sed -n 's/.*"github:getplumber\/plumber" = "\([^"]*\)".*/\1/p' mise.toml)
+            {
+              echo "changed=true"
+              echo "version=$version"
+            } >> "$GITHUB_OUTPUT"
+          fi
+      # The new version gates the update: it must still accept our policy
+      # overlay and must not find regressions in the workflows it enforces.
+      - name: Validate the policy with the new version
+        if: steps.pin.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ steps.pin.outputs.version }}"
+          curl -sfL -o plumber "https://github.com/getplumber/plumber/releases/download/v${version}/plumber-linux-amd64"
+          curl -sfL -o checksums.txt "https://github.com/getplumber/plumber/releases/download/v${version}/checksums.txt"
+          grep "plumber-linux-amd64" checksums.txt | sha256sum -c -
+          chmod +x plumber
+          ./plumber config validate .plumber.yaml
+          ./plumber analyze .
+      - name: Open the update PR
+        if: steps.pin.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${{ steps.pin.outputs.version }}"
+          branch="chore/plumber-${version}"
+          base_sha=$(git rev-parse HEAD)
+
+          # All writes go through the REST API: the checkout has
+          # persist-credentials: false, so no git push here.
+          gh api -X DELETE "repos/${GH_REPO}/git/refs/heads/${branch}" >/dev/null 2>&1 || true
+          gh api -X POST "repos/${GH_REPO}/git/refs" \
+            -f "ref=refs/heads/${branch}" -f "sha=${base_sha}" >/dev/null
+
+          blob=$(gh api -X POST "repos/${GH_REPO}/git/blobs" \
+            -f "content=$(base64 -w0 mise.toml)" -f "encoding=base64" --jq '.sha')
+          base_tree=$(gh api "repos/${GH_REPO}/git/commits/${base_sha}" --jq '.tree.sha')
+          tree=$(jq -n --arg blob "$blob" --arg base "$base_tree" \
+            '{base_tree: $base, tree: [{path: "mise.toml", mode: "100644", type: "blob", sha: $blob}]}' |
+            gh api -X POST "repos/${GH_REPO}/git/trees" --input - --jq '.sha')
+          commit=$(gh api -X POST "repos/${GH_REPO}/git/commits" \
+            -f "message=chore: pin plumber to ${version}" \
+            -f "tree=${tree}" -f "parents[]=${base_sha}" --jq '.sha')
+          gh api -X PATCH "repos/${GH_REPO}/git/refs/heads/${branch}" -f "sha=${commit}" >/dev/null
+
+          body=$(printf 'Automated plumber pin update (%s).\n\n- mise.toml pin: `%s`\n- policy overlay re-validated and analyzed with the new version\n\nSee docs/DECISIONS.md #18.' \
+            "${version}" "${version}")
+          gh api -X POST "repos/${GH_REPO}/pulls" \
+            -f "title=chore: pin plumber to ${version}" \
+            -f "head=${branch}" -f "base=main" -f "body=${body}" --jq '.html_url'
