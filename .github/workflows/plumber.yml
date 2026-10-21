@@ -29,7 +29,7 @@ jobs:
       # in .plumber.yaml): SHA-pinned to the release matching the mise.toml
       # pin, and the binary it installs is verified against checksums.txt
       # and its SLSA build-provenance attestation.
-      - uses: getplumber/plumber@ccd274c2abc9f66d7e44051d612d49c8ed1747ac # v0.7.2
+      - uses: getplumber/plumber@cd1ecdf0a0053f9b0cc123976bb369772d876af3 # v0.7.4
         with:
           version: v0.7.2 # follows the mise.toml pin
           # Gate at 90 points: a PR whose Plumber Score drops below 90 fails
