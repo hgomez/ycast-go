@@ -16,9 +16,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (node24)
         with:
           persist-credentials: false
+      # The Go toolchain follows the mise.toml pin (single source of truth
+      # for local dev and CI); go.mod only declares the minimum language
+      # version, not the toolchain in use.
+      - name: Read the Go version from mise.toml
+        id: mise
+        run: |
+          go_version=$(awk -F'"' '/^go[ \t]*=/{print $2}' mise.toml)
+          [ -n "$go_version" ] || { echo "no 'go =' pin found in mise.toml"; exit 1; }
+          echo "go=$go_version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0 (node24)
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.mise.outputs.go }}
       - name: Check gofmt
         run: |
           unformatted=$(gofmt -l cmd internal)
@@ -48,9 +57,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (node24)
         with:
           persist-credentials: false
+      # Same as the test job: toolchain version comes from mise.toml.
+      - name: Read the Go version from mise.toml
+        id: mise
+        run: |
+          go_version=$(awk -F'"' '/^go[ \t]*=/{print $2}' mise.toml)
+          [ -n "$go_version" ] || { echo "no 'go =' pin found in mise.toml"; exit 1; }
+          echo "go=$go_version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0 (node24)
         with:
-          go-version-file: go.mod
+          go-version: ${{ steps.mise.outputs.go }}
       - name: Build arm64 and armv7
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /tmp/ycast-go-arm64 ./cmd/ycast-go
