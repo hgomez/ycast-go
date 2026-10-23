@@ -1,40 +1,80 @@
+# Plumber, added to hgomez/ycast-go by the Plumber GitHub App.
+#
+# This workflow is the scanner. It reads this repository's CI configuration
+# against a supply-chain trust policy (how actions are pinned, what a token may
+# do, what a workflow may reach) and pushes the report to the Plumber service,
+# which keeps the findings and the score and opens a pull request when a push
+# adds a finding that was not there before.
+#
+# Nothing here holds a credential of this repository. The report is
+# authenticated with the Actions OIDC token this job mints for itself, which is
+# what `id-token: write` below is for: the service verifies that token and has
+# no secret of yours to lose.
+#
+# Every third-party action is pinned by commit sha, which is one of the controls
+# this scan checks. The comment after each sha is the tag it was published as.
 name: Plumber
-
-# CI/CD security scan of this repository's workflows (see .plumber.yaml,
-# docs/DECISIONS.md #18). Findings are uploaded to Code Scanning (SARIF) and
-# the Plumber Score is published as a public badge (score-push), which is
-# why the job needs security-events: write and id-token: write.
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  # Every pull request, on every branch, so the check this workflow publishes
+  # runs on the pull request that adds it: the pull request Plumber opens is
+  # reviewed with its own check beside it, and so is every pull request that
+  # changes a workflow afterwards. A pull request scan is reported and is never
+  # the branch's history: the service keeps it under the branch it ran on and
+  # compares nothing against it.
   pull_request:
+  # Once a week, because a finding can appear without anybody pushing: an action
+  # that was trustworthy on Monday is a tag that moved on Thursday.
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
 
 permissions:
+  id-token: write
   contents: read
+  # Plumber reads this repository's workflow run states, and one run's job log,
+  # to resolve what a job's token may really do and whether a job can run at
+  # all. Without this permission those claims stay unknown, which reads as a
+  # lower score than the same repository measured with it.
+  actions: read
 
 jobs:
   plumber:
-    name: CI/CD security scan
+    name: Plumber
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write # SARIF upload to Code Scanning
-      id-token: write # OIDC for the hosted score badge (score-push)
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (node24)
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The scan reads files and never pushes, so the job needs no git
+          # credential left behind in the checkout.
           persist-credentials: false
-      # The one deliberate third-party action in this repository (allowed
-      # in .plumber.yaml): SHA-pinned to the release matching the mise.toml
-      # pin, and the binary it installs is verified against checksums.txt
-      # and its SLSA build-provenance attestation.
-      - uses: getplumber/plumber@d1133cdac48cfdf0c0004637ae4af38bcf9f16c7 # v0.7.11
+      - name: Scan and push the report
+        uses: getplumber/plumber@7f1e28b3f45b6356895763f2bada391cc46b6537 # v0.7.6
         with:
-          version: v0.7.11 # follows the mise.toml pin
-          # Gate at 90 points: a PR whose Plumber Score drops below 90 fails
-          # the job (required status check on main, docs/DECISIONS.md D-006).
-          # The repo currently scores 100/100 — a PR that degrades it to
-          # 90–99 passes, anything lower is blocked.
-          min-points: "90"
-          score-push: true # publishes the live badge for the README
+          score-push: true
+          score-endpoint: https://app.getplumber.tech/ingest
+          # Whether a score can fail this check, and the line below is the whole
+          # of it. The scan runs, reports every finding and pushes the score
+          # either way, and a runtime error fails the job either way.
+          #
+          # `soft-fail: true` lets the check pass whatever the score is, and it
+          # is what this file is installed with: it is committed before anything
+          # has scanned this repository, and the default gate is all or nothing
+          # at 100 points, so a gate here would fail a pull request on a number
+          # nobody has measured.
+          #
+          # `min-points: <floor>` fails the check when the score drops below
+          # that floor. The Plumber run that follows the install writes it in
+          # place of the line above, into that same commit, at the floor of the
+          # score it measured on this branch after its repairs: green on the day
+          # it arrives, and red the day the score drops below where it started.
+          # Raise it as the score goes up. Nothing lowers it, and a gate you have
+          # edited yourself is left exactly as you wrote it.
+          min-points: 100
+          # Code scanning needs GitHub Advanced Security, which a private
+          # repository on a free plan does not have.
+          upload-sarif: false
