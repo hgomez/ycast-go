@@ -12,38 +12,49 @@ One small static binary, no cgo, cross-compilable for Raspberry Pi, NAS boxes
 or routers. Dependencies are kept to a strict minimum (`gopkg.in/yaml.v3`,
 `golang.org/x/image`) — see `docs/DECISIONS.md`.
 
+## Build
+
+Requires a Go toolchain (see `go.mod` for the minimum version). The code is
+pure Go (no cgo), so everything cross-compiles from any host — no
+cross-compiler or sysroot needed.
+
+Simple local build (for the host platform):
+
+```sh
+go build -trimpath -ldflags "-s -w" -o ycast-go ./cmd/ycast-go
+```
+
+Cross-compiled builds for all supported targets:
+
+```sh
+./build.sh              # fills dist/ for amd64, arm64, armv7, armv6, mips, mipsle
+./build.sh 1.2.3        # same, stamping the version string
+```
+
+Manual equivalent for one target:
+
+```sh
+# ARM 64-bit (Pi 3/4/5, ARM servers):
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+  go build -trimpath -ldflags "-s -w" -o dist/ycast-go-linux-arm64 ./cmd/ycast-go
+# ARM 32-bit: GOARM=7 for Pi running armhf, GOARM=6 for Pi Zero/1.
+CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
+  go build -trimpath -ldflags "-s -w" -o dist/ycast-go-linux-armv7 ./cmd/ycast-go
+```
+
+`GOARM=6` runs on every ARM board; try `armv7` first on a 32-bit OS and
+fall back to `armv6` on "Illegal instruction". To sanity-check a binary
+without the hardware: `dnf install qemu-user && qemu-aarch64
+dist/ycast-go-linux-arm64 -version`.
+
+For distribution packages (RPM, deb, OpenWrt), see [Packaging](#packaging).
+
 ## Setup (example: Denon DRA-N5)
 
 1. **Pick the machine** that will run the server (Pi, NAS, mini PC, router…).
    It needs a fixed IP and a **free port 80** (receivers only talk to port 80).
-2. **Copy the matching binary** from `dist/` (see below). Or build it:
-   `go build -trimpath -ldflags "-s -w" -o ycast-go ./cmd/ycast-go`
-
-   ### Building / cross-compiling
-
-   The code is pure Go (no cgo), so everything cross-compiles from any host
-   with the Go toolchain — no cross-compiler or sysroot needed:
-
-   ```sh
-   ./build.sh              # fills dist/ for amd64, arm64, armv7, armv6, mips, mipsle
-   ./build.sh 1.2.3        # same, stamping the version string
-   ```
-
-   Manual equivalent for one target:
-
-   ```sh
-   # ARM 64-bit (Pi 3/4/5, ARM servers):
-   CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-     go build -trimpath -ldflags "-s -w" -o dist/ycast-go-linux-arm64 ./cmd/ycast-go
-   # ARM 32-bit: GOARM=7 for Pi running armhf, GOARM=6 for Pi Zero/1.
-   CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 \
-     go build -trimpath -ldflags "-s -w" -o dist/ycast-go-linux-armv7 ./cmd/ycast-go
-   ```
-
-   `GOARM=6` runs on every ARM board; try `armv7` first on a 32-bit OS and
-   fall back to `armv6` on "Illegal instruction". To sanity-check a binary
-   without the hardware: `dnf install qemu-user && qemu-aarch64
-   dist/ycast-go-linux-arm64 -version`.
+2. **Copy the matching binary** from `dist/` (see [Build](#build) below) or
+   from a [release](https://github.com/hgomez/ycast-go/releases).
 3. **Create your `stations.yml`** (see `stations.yml.example`).
 4. **Run it**: `sudo ./ycast-go -c stations.yml` (add `-d` for verbose logs).
 5. **Redirect DNS**: `denon.vtuner.com` and `denon2.vtuner.com` must point to
