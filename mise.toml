@@ -1,8 +1,7 @@
 [tools]
-gh = "latest"
 go = "1.26.10"
-golangci-lint = "2.14.0"
-"github:getplumber/plumber" = "0.7.11"
+"github:getplumber/plumber" = "0.7.17"
+golangci-lint = "2.15.0"
 
 # Keep the plumber pin current: mise run update-plumber (manual; the pin is
 # not auto-updated — see docs/DECISIONS.md #18).
