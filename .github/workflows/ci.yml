@@ -25,7 +25,7 @@ jobs:
           go_version=$(awk -F'"' '/^go[ \t]*=/{print $2}' mise.toml)
           [ -n "$go_version" ] || { echo "no 'go =' pin found in mise.toml"; exit 1; }
           echo "go=$go_version" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0 (node24)
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.0.0 (node24)
         with:
           go-version: ${{ steps.mise.outputs.go }}
       - name: Check gofmt
@@ -64,7 +64,7 @@ jobs:
           go_version=$(awk -F'"' '/^go[ \t]*=/{print $2}' mise.toml)
           [ -n "$go_version" ] || { echo "no 'go =' pin found in mise.toml"; exit 1; }
           echo "go=$go_version" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0 (node24)
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.0.0 (node24)
         with:
           go-version: ${{ steps.mise.outputs.go }}
       - name: Build arm64 and armv7
